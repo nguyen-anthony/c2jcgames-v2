@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#b71c1c" />
+  <g fill="#fff">
+    <circle cx="132" cy="132" r="28" />
+    <circle cx="380" cy="132" r="28" />
+    <circle cx="132" cy="380" r="28" />
+    <circle cx="380" cy="380" r="28" />
+  </g>
+  <text x="256" y="282" fill="#fff" font-family="Arial, sans-serif" font-size="112" font-weight="700" text-anchor="middle">C2JC</text>
+  <text x="256" y="354" fill="#fff" font-family="Arial, sans-serif" font-size="46" font-weight="600" letter-spacing="8" text-anchor="middle">GAMES</text>
+</svg>
