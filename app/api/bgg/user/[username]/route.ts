@@ -9,7 +9,7 @@ export async function GET(
   const { username } = await params;
   try {
     const response = await axios.get(
-      `https://boardgamegeek.com/xmlapi2/user?name=${username}`,
+      `https://boardgamegeek.com/xmlapi2/user?name=${encodeURIComponent(username)}`,
       {
         headers: {
           "User-Agent": "c2jcgames/1.0 (boardgame collection app)",

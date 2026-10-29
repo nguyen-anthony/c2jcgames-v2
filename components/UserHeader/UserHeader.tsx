@@ -20,7 +20,7 @@ function UserHeader() {
         !userId ||
         !loginExpire ||
         loginExpire < Date.now() ||
-        !(await getUser(null, null, null, userId))
+        !(await getUser(null, userId))
       ) {
         router.push("/nametag");
       }

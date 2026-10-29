@@ -6,7 +6,6 @@ import {
   Container,
   Typography,
   TextField,
-  Divider,
   Box,
   Stack,
   Paper,
@@ -28,13 +27,14 @@ type AlertInfo = {
   severity: "success" | "error" | "info" | "warning" | "";
 };
 
-type ActiveForm = "NON_BGG" | "BGG";
+type LoginStep = "username" | "name";
 
 export default function NameTag() {
+  const [username, setUsername] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [bggUsername, setBggUsername] = useState("");
-  const [activeForm, setActiveForm] = useState<ActiveForm>("NON_BGG");
+  const [step, setStep] = useState<LoginStep>("username");
+  const [loading, setLoading] = useState(false);
   const [alertInfo, setAlertInfo] = useState<AlertInfo>({
     message: "",
     severity: "",
@@ -53,70 +53,98 @@ export default function NameTag() {
     last: string,
     bggacc: string | null
   ) => {
-    setTimeout(() => {
-      setUser(userId, first, last, bggacc);
-      router.push("/");
-    }, 2500);
+    setUser(userId, first, last, bggacc);
+    router.push("/");
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const handleUsernameSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const existingUser = await getUser(firstName, lastName, bggUsername);
+    const normalizedUsername = username.trim().toLowerCase();
+    if (!normalizedUsername) return;
 
-    if (existingUser) {
-      const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-      setAlertInfo({
-        message: `Welcome back ${cap(existingUser.firstname)} ${cap(existingUser.lastname)}! Redirecting to home page...`,
-        severity: "success",
-      });
+    setLoading(true);
+    setAlertInfo({ message: "Checking username...", severity: "info" });
+    try {
+      const existingUser = await getUser(normalizedUsername);
 
-      if (existingUser.bggacc) {
-        const ownedGames = await getOwnedGamesCollection(existingUser.userid);
-        const bggCollection = await getBggGamesForUser(existingUser.bggacc);
-        if (
-          bggCollection &&
-          ownedGames?.length !== bggCollection.length &&
-          bggCollection.length !== 0
-        ) {
-          updateBggUserGames(existingUser.bggacc, bggCollection);
+      if (existingUser) {
+        if (existingUser.bggacc) {
+          const ownedGames = await getOwnedGamesCollection(existingUser.userid);
+          const bggCollection = await getBggGamesForUser(existingUser.bggacc);
+          if (
+            bggCollection &&
+            ownedGames?.length !== bggCollection.length &&
+            bggCollection.length !== 0
+          ) {
+            await updateBggUserGames(existingUser.bggacc, bggCollection);
+          }
         }
+
+        navigateHome(
+          existingUser.userid,
+          existingUser.firstname,
+          existingUser.lastname,
+          existingUser.bggacc
+        );
+        return;
       }
 
-      navigateHome(
-        existingUser.userid,
-        existingUser.firstname,
-        existingUser.lastname,
-        existingUser.bggacc
-      );
-    } else if (activeForm === "NON_BGG") {
-      setAlertInfo({
-        message: `Welcome ${firstName} ${lastName}! Redirecting to home page...`,
-        severity: "success",
-      });
-      const userId = await addUser(firstName, lastName, "");
-      if (userId) navigateHome(userId, firstName, lastName, null);
-    } else {
-      setAlertInfo({
-        message: "Retrieving BGG Account Details...",
-        severity: "info",
-      });
-      const bggDetails = await getBggUserDetails(bggUsername);
-      if (bggDetails.success && bggDetails.userId) {
-        setAlertInfo({ message: bggDetails.message!, severity: "success" });
-        navigateHome(
-          bggDetails.userId,
-          bggDetails.firstName!,
-          bggDetails.lastName!,
-          bggUsername
+      const bggDetails = await getBggUserDetails(normalizedUsername);
+      if (bggDetails.success) {
+        const gamesForUser = await getBggGamesForUser(normalizedUsername);
+        const userId = await addUser(
+          normalizedUsername,
+          bggDetails.firstName || normalizedUsername,
+          bggDetails.lastName || "",
+          normalizedUsername,
+          gamesForUser
         );
+        if (!userId) {
+          setAlertInfo({ message: "Could not create your account. Please try again.", severity: "error" });
+          return;
+        }
+        navigateHome(
+          userId,
+          bggDetails.firstName || normalizedUsername,
+          bggDetails.lastName || "",
+          normalizedUsername
+        );
+      } else if (bggDetails.notFound) {
+        setStep("name");
+        setAlertInfo({
+          message: "We couldn't find that username on BoardGameGeek. Add your name to finish creating your account.",
+          severity: "info",
+        });
       } else {
-        setAlertInfo({ message: bggDetails.message!, severity: "error" });
+        setAlertInfo({ message: bggDetails.message ?? "Unable to check BoardGameGeek. Please try again.", severity: "error" });
       }
+    } catch (error) {
+      console.error("Error signing in:", error);
+      setAlertInfo({ message: "Unable to sign in. Please try again.", severity: "error" });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const nonBggOpacity = activeForm === "BGG" ? 0.4 : 1;
-  const bggOpacity = activeForm === "NON_BGG" ? 0.4 : 1;
+  const handleNameSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!firstName.trim() || !lastName.trim()) return;
+
+    setLoading(true);
+    try {
+      const userId = await addUser(username, firstName, lastName, "");
+      if (!userId) {
+        setAlertInfo({ message: "Could not create your account. That username may already be in use.", severity: "error" });
+        return;
+      }
+      navigateHome(userId, firstName.trim(), lastName.trim(), null);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      setAlertInfo({ message: "Could not create your account. That username may already be in use.", severity: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Container
@@ -143,24 +171,45 @@ export default function NameTag() {
 
           <Box
             component="form"
-            onSubmit={handleSubmit}
+            onSubmit={step === "username" ? handleUsernameSubmit : handleNameSubmit}
             sx={{ width: "100%" }}
           >
-            <Stack spacing={3}>
-              {/* Non-BGG section */}
-              <Box sx={{ opacity: nonBggOpacity, transition: "opacity 0.2s" }}>
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                  Non-BGG Users
-                </Typography>
-                <Stack spacing={1.5}>
+            <Stack spacing={2}>
+              {step === "username" ? (
+                <>
+                  <TextField
+                    label="Username"
+                    variant="outlined"
+                    fullWidth
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    size="small"
+                    autoComplete="username"
+                    autoFocus
+                    required
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Use your BoardGameGeek username if you have one, else your desired username
+                  </Typography>
+                  <PrimaryButton type="submit" disabled={loading}>
+                    {loading ? "Checking..." : "Continue"}
+                  </PrimaryButton>
+                </>
+              ) : (
+                <>
+                  <Typography variant="body2" color="text.secondary">
+                    Username: <strong>{username.trim()}</strong>
+                  </Typography>
                   <TextField
                     label="First Name"
                     variant="outlined"
                     fullWidth
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    onFocus={() => setActiveForm("NON_BGG")}
                     size="small"
+                    autoComplete="given-name"
+                    autoFocus
+                    required
                   />
                   <TextField
                     label="Last Name"
@@ -168,35 +217,25 @@ export default function NameTag() {
                     fullWidth
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    onFocus={() => setActiveForm("NON_BGG")}
                     size="small"
+                    autoComplete="family-name"
+                    required
                   />
-                </Stack>
-              </Box>
-
-              <Divider>
-                <Typography variant="body2" color="text.secondary">
-                  OR
-                </Typography>
-              </Divider>
-
-              {/* BGG section */}
-              <Box sx={{ opacity: bggOpacity, transition: "opacity 0.2s" }}>
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                  BoardGameGeek Users
-                </Typography>
-                <TextField
-                  label="BGG Username"
-                  variant="outlined"
-                  fullWidth
-                  value={bggUsername}
-                  onChange={(e) => setBggUsername(e.target.value)}
-                  onFocus={() => setActiveForm("BGG")}
-                  size="small"
-                />
-              </Box>
-
-              <PrimaryButton type="submit">Sign In</PrimaryButton>
+                  <PrimaryButton type="submit" disabled={loading}>
+                    {loading ? "Creating account..." : "Create Account"}
+                  </PrimaryButton>
+                  <PrimaryButton
+                    type="button"
+                    onClick={() => {
+                      setStep("username");
+                      setAlertInfo({ message: "", severity: "" });
+                    }}
+                    disabled={loading}
+                  >
+                    Back
+                  </PrimaryButton>
+                </>
+              )}
 
               {alertInfo.message && (
                 <CustomAlert
