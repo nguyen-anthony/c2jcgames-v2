@@ -98,6 +98,21 @@ function GameListCard({
       }}
     >
       <CardHeader
+        avatar={
+          game.imageurl && !expanded ? (
+            <Box
+              component="img"
+              src={game.imageurl}
+              alt={`${game.name} thumbnail`}
+              sx={{
+                width: 56,
+                height: 56,
+                objectFit: "cover",
+                borderRadius: 1,
+              }}
+            />
+          ) : null
+        }
         title={
           <Box
             sx={{
@@ -117,6 +132,7 @@ function GameListCard({
               {game.name}
             </Typography>
             <ExpandMoreIcon
+              fontSize="large"
               sx={{
                 transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
                 transition: "transform 0.2s",
@@ -151,21 +167,33 @@ function GameListCard({
                 variant="outlined"
               />
             )}
-            <IconButton
-              onClick={handleLikeClick}
-              aria-label="interested to play"
-              size="small"
+              <IconButton
+                onClick={handleLikeClick}
+                aria-label="interested to play"
+              size="large"
               color={liked ? "primary" : "default"}
               disabled={!userId}
+              sx={{ minWidth: 48, minHeight: 48 }}
             >
-              {liked ? <ThumbUpAltRounded /> : <ThumbUpOffAlt />}
+              {liked ? (
+                <ThumbUpAltRounded sx={{ fontSize: 30 }} />
+              ) : (
+                <ThumbUpOffAlt sx={{ fontSize: 30 }} />
+              )}
             </IconButton>
           </Box>
         }
         sx={{ pb: 0, alignItems: "flex-start" }}
       />
       <Collapse in={expanded} timeout="auto" unmountOnExit>
-        <CardContent sx={{ pt: 1 }}>
+        <CardContent
+          sx={{
+            px: 2,
+            pt: 1.5,
+            pb: 2,
+            "&:last-child": { pb: 2 },
+          }}
+        >
           <Box
             sx={{
               display: "flex",
