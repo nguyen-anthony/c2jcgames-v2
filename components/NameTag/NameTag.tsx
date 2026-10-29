@@ -27,12 +27,14 @@ type AlertInfo = {
   severity: "success" | "error" | "info" | "warning" | "";
 };
 
-type LoginStep = "username" | "name";
+type LoginStep = "username" | "associate" | "name";
+type BggAccountDetails = { firstName: string; lastName: string };
 
 export default function NameTag() {
   const [username, setUsername] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [bggDetails, setBggDetails] = useState<BggAccountDetails | null>(null);
   const [step, setStep] = useState<LoginStep>("username");
   const [loading, setLoading] = useState(false);
   const [alertInfo, setAlertInfo] = useState<AlertInfo>({
@@ -91,24 +93,15 @@ export default function NameTag() {
 
       const bggDetails = await getBggUserDetails(normalizedUsername);
       if (bggDetails.success) {
-        const gamesForUser = await getBggGamesForUser(normalizedUsername);
-        const userId = await addUser(
-          normalizedUsername,
-          bggDetails.firstName || normalizedUsername,
-          bggDetails.lastName || "",
-          normalizedUsername,
-          gamesForUser
-        );
-        if (!userId) {
-          setAlertInfo({ message: "Could not create your account. Please try again.", severity: "error" });
-          return;
-        }
-        navigateHome(
-          userId,
-          bggDetails.firstName || normalizedUsername,
-          bggDetails.lastName || "",
-          normalizedUsername
-        );
+        setBggDetails({
+          firstName: bggDetails.firstName ?? "",
+          lastName: bggDetails.lastName ?? "",
+        });
+        setStep("associate");
+        setAlertInfo({
+          message: "A BoardGameGeek account was found for this username. Would you like to associate it with your account?",
+          severity: "info",
+        });
       } else if (bggDetails.notFound) {
         setStep("name");
         setAlertInfo({
@@ -124,6 +117,45 @@ export default function NameTag() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAssociateBggAccount = async () => {
+    if (!bggDetails) return;
+
+    setLoading(true);
+    try {
+      const gamesForUser = await getBggGamesForUser(username.trim().toLowerCase());
+      const userId = await addUser(
+        username,
+        bggDetails.firstName || username,
+        bggDetails.lastName,
+        username,
+        gamesForUser
+      );
+      if (!userId) {
+        setAlertInfo({ message: "Could not create your account. That username may already be in use.", severity: "error" });
+        return;
+      }
+      navigateHome(
+        userId,
+        bggDetails.firstName || username,
+        bggDetails.lastName,
+        username.trim().toLowerCase()
+      );
+    } catch (error) {
+      console.error("Error creating BGG-linked user:", error);
+      setAlertInfo({ message: "Could not create your account. Please try again.", severity: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const continueWithoutBgg = () => {
+    setStep("name");
+    setAlertInfo({
+      message: "Enter your first and last name to finish creating your account. Your BGG account will not be linked.",
+      severity: "info",
+    });
   };
 
   const handleNameSubmit = async (event: React.FormEvent) => {
@@ -195,6 +227,37 @@ export default function NameTag() {
                     {loading ? "Checking..." : "Continue"}
                   </PrimaryButton>
                 </>
+              ) : step === "associate" ? (
+                <>
+                  <Typography variant="body2" color="text.secondary">
+                    Username: <strong>{username.trim()}</strong>
+                  </Typography>
+                  <PrimaryButton
+                    type="button"
+                    onClick={handleAssociateBggAccount}
+                    disabled={loading}
+                  >
+                    {loading ? "Associating account..." : "Yes, associate my BGG account"}
+                  </PrimaryButton>
+                  <PrimaryButton
+                    type="button"
+                    onClick={continueWithoutBgg}
+                    disabled={loading}
+                  >
+                    No, continue without BGG
+                  </PrimaryButton>
+                  <PrimaryButton
+                    type="button"
+                    onClick={() => {
+                      setStep("username");
+                      setBggDetails(null);
+                      setAlertInfo({ message: "", severity: "" });
+                    }}
+                    disabled={loading}
+                  >
+                    Back
+                  </PrimaryButton>
+                </>
               ) : (
                 <>
                   <Typography variant="body2" color="text.secondary">
@@ -228,6 +291,7 @@ export default function NameTag() {
                     type="button"
                     onClick={() => {
                       setStep("username");
+                      setBggDetails(null);
                       setAlertInfo({ message: "", severity: "" });
                     }}
                     disabled={loading}
