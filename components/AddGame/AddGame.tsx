@@ -188,7 +188,8 @@ export default function AddGame() {
       sx={{
         display: "flex",
         flexDirection: "column",
-        minHeight: "100dvh",
+        height: "100dvh",
+        overflow: "hidden",
       }}
     >
       {/* Header */}
@@ -199,9 +200,23 @@ export default function AddGame() {
       </Box>
 
       {/* Main content */}
-      <Box sx={{ flex: 1, px: 2, pb: 2 }}>
-        <Container maxWidth="sm" disableGutters>
-          <Paper elevation={2} sx={{ borderRadius: 2, overflow: "hidden" }}>
+      <Box sx={{ flex: 1, minHeight: 0, px: 2, pb: 2, display: "flex" }}>
+        <Container
+          maxWidth="sm"
+          disableGutters
+          sx={{ display: "flex", flexDirection: "column", minHeight: 0 }}
+        >
+          <Paper
+            elevation={2}
+            sx={{
+              borderRadius: 2,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
             <Tabs
               value={tabValue}
               onChange={(_, v) => setTabValue(v)}
@@ -216,15 +231,28 @@ export default function AddGame() {
             <Box
               component="form"
               onSubmit={handleSubmit}
-              sx={{ p: { xs: 2, sm: 3 } }}
+              sx={{
+                p: { xs: 2, sm: 3 },
+                display: "flex",
+                flexDirection: "column",
+                flex: 1,
+                minHeight: 0,
+              }}
             >
-              <Stack spacing={2}>
+              <Stack spacing={2} sx={{ flex: 1, minHeight: 0 }}>
                 {tabValue === 0 && (
                   <BGGUrlForm gameURL={gameURL} setGameURL={setGameURL} />
                 )}
 
                 {tabValue === 1 && (
-                  <Box>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      flex: 1,
+                      minHeight: 0,
+                    }}
+                  >
                     <Typography variant="body2" color="text.secondary" mb={1}>
                       {!isBggUser
                         ? "No BGG account linked. Sign in with your BGG username to import."
@@ -232,7 +260,7 @@ export default function AddGame() {
                         ? "All your BGG games have already been added."
                         : `Select games to import (${checkedGames.length} selected)`}
                     </Typography>
-                    <Box>
+                    <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                       {gameCollection.map((game) => (
                         <BGGGameCard
                           key={game.gameid}
@@ -246,27 +274,29 @@ export default function AddGame() {
                   </Box>
                 )}
 
-                <PrimaryButton
-                  type="submit"
-                  disabled={
-                    loading ||
-                    (tabValue === 1 && bggImportDisabled) ||
-                    (tabValue === 1 && checkedGames.length === 0)
-                  }
-                >
-                  {loading ? (
-                    <CircularProgress size={20} color="inherit" />
-                  ) : (
-                    "Submit"
-                  )}
-                </PrimaryButton>
-
                 {alertInfo.message && (
                   <CustomAlert
                     severity={alertInfo.severity}
                     message={alertInfo.message}
                   />
                 )}
+
+                <Box sx={{ mt: "auto !important" }}>
+                  <PrimaryButton
+                    type="submit"
+                    disabled={
+                      loading ||
+                      (tabValue === 1 && bggImportDisabled) ||
+                      (tabValue === 1 && checkedGames.length === 0)
+                    }
+                  >
+                    {loading ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : (
+                      "Submit"
+                    )}
+                  </PrimaryButton>
+                </Box>
               </Stack>
             </Box>
           </Paper>
