@@ -191,6 +191,8 @@ function GameListCard({
             px: 2,
             pt: 1.5,
             pb: 2,
+            maxHeight: { xs: "55dvh", sm: "none" },
+            overflowY: { xs: "auto", sm: "visible" },
             "&:last-child": { pb: 2 },
           }}
         >

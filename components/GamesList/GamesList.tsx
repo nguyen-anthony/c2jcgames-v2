@@ -128,7 +128,7 @@ function GamesList() {
       </Box>
 
       {/* Scrollable games list */}
-      <Box sx={{ flex: 1, overflowY: "auto", px: 2 }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2 }}>
         <Container maxWidth="md" disableGutters>
           {loading ? (
             <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
