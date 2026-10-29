@@ -18,6 +18,7 @@ import GameListCard from "./GameListCard";
 import useUser from "@/hooks/useUser";
 import BottomNav from "@/components/BottomNav/BottomNav";
 import UserHeader from "@/components/UserHeader/UserHeader";
+import { createClient } from "@/utils/supabase/client";
 
 type SortOption = "default" | "aToZ" | "zToA" | "numInterested";
 
@@ -29,6 +30,17 @@ const SORT_LABELS: Record<SortOption, string> = {
   zToA: "Sort: Default",
 };
 
+function normalizeGame(game: Record<string, unknown>) {
+  return {
+    ...game,
+    interested_players:
+      Array.isArray(game.interested_players) &&
+      game.interested_players[0] !== null
+        ? (game.interested_players as string[])
+        : [],
+  };
+}
+
 function GamesList() {
   const [gamesList, setGamesList] = useState<ReturnType<typeof normalizeGame>[]>([]);
   const [interestedGamesForUser, setInterestedGamesForUser] = useState<
@@ -38,17 +50,6 @@ function GamesList() {
   const [sortOption, setSortOption] = useState<SortOption>("default");
   const [loading, setLoading] = useState(true);
   const { userId } = useUser();
-
-  function normalizeGame(game: Record<string, unknown>) {
-    return {
-      ...game,
-      interested_players:
-        Array.isArray(game.interested_players) &&
-        game.interested_players[0] !== null
-          ? (game.interested_players as string[])
-          : [],
-    };
-  }
 
   const fetchGamesList = useCallback(async () => {
     const data = await getGamesList();
@@ -71,13 +72,26 @@ function GamesList() {
   }, [userId]);
 
   useEffect(() => {
-    fetchGamesList();
-  }, [fetchGamesList]);
+    const supabase = createClient();
+    const channel = supabase
+      .channel("games-list-live-updates")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "games" },
+        () => void fetchGamesList()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "game_interested" },
+        () => void fetchGamesList()
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void fetchGamesList();
+      });
 
-  // Real-time updates: poll every 30s as a lightweight alternative to WebSockets
-  useEffect(() => {
-    const interval = setInterval(fetchGamesList, 30_000);
-    return () => clearInterval(interval);
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [fetchGamesList]);
 
   const toggleSort = () => {
