@@ -188,8 +188,7 @@ export default function AddGame() {
       sx={{
         display: "flex",
         flexDirection: "column",
-        height: "100dvh",
-        overflow: "hidden",
+        minHeight: "100dvh",
       }}
     >
       {/* Header */}
@@ -200,7 +199,7 @@ export default function AddGame() {
       </Box>
 
       {/* Main content */}
-      <Box sx={{ flex: 1, overflowY: "auto", px: 2, pb: 2 }}>
+      <Box sx={{ flex: 1, px: 2, pb: 2 }}>
         <Container maxWidth="sm" disableGutters>
           <Paper elevation={2} sx={{ borderRadius: 2, overflow: "hidden" }}>
             <Tabs
@@ -233,7 +232,7 @@ export default function AddGame() {
                         ? "All your BGG games have already been added."
                         : `Select games to import (${checkedGames.length} selected)`}
                     </Typography>
-                    <Box sx={{ maxHeight: "45vh", overflowY: "auto" }}>
+                    <Box>
                       {gameCollection.map((game) => (
                         <BGGGameCard
                           key={game.gameid}
