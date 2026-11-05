@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Button,
   Container,
@@ -46,13 +46,20 @@ function GamesList() {
   const [interestedGamesForUser, setInterestedGamesForUser] = useState<
     { gameid: number }[]
   >([]);
+  const refreshId = useRef(0);
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [sortOption, setSortOption] = useState<SortOption>("default");
   const [loading, setLoading] = useState(true);
   const { userId } = useUser();
 
   const fetchGamesList = useCallback(async () => {
-    const data = await getGamesList();
+    const requestId = ++refreshId.current;
+    const [data, interested] = await Promise.all([
+      getGamesList(),
+      userId ? getInterestedGamesForUser(userId) : null,
+    ]);
+    if (requestId !== refreshId.current) return;
+
     if (data) {
       setGamesList(
         data
@@ -64,10 +71,7 @@ function GamesList() {
           .map(normalizeGame)
       );
     }
-    if (userId) {
-      const interested = await getInterestedGamesForUser(userId);
-      if (interested) setInterestedGamesForUser(interested);
-    }
+    if (interested) setInterestedGamesForUser(interested);
     setLoading(false);
   }, [userId]);
 
@@ -78,6 +82,11 @@ function GamesList() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "games" },
+        () => void fetchGamesList()
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "games" },
         () => void fetchGamesList()
       )
       .on(

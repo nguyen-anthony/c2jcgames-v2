@@ -21,6 +21,16 @@ export async function addGameToDb(gameId: string | number, userId: string | numb
   }
 }
 
+export async function removeGameFromDb(gameId: string | number, userId: string | number) {
+  try {
+    await axios.delete("/api/db/removeGame", { data: { gameId, userId } });
+    return { success: true };
+  } catch (error) {
+    console.error("Error removing game:", error);
+    return { success: false };
+  }
+}
+
 export async function addGameDetailsToDb(gameDetails: {
   gameId: string | number;
   name: string;

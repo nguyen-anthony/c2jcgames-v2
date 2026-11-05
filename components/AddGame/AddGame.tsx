@@ -10,7 +10,10 @@ import {
   Paper,
   Stack,
   CircularProgress,
+  Card,
+  Button,
 } from "@mui/material";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CustomAlert from "@/components/Common/CustomAlert";
 import PrimaryButton from "@/components/Common/PrimaryButton";
 import BGGUrlForm from "./BGGUrlForm";
@@ -25,6 +28,8 @@ import {
   getGameDetailsFromDb,
   getOwnedGamesCollection,
   getOwnedGamesInGamesTable,
+  getGamesList,
+  removeGameFromDb,
 } from "@/services/gameService";
 
 type AlertInfo = {
@@ -48,6 +53,9 @@ export default function AddGame() {
   const [gamesListForUser, setGamesListForUser] = useState<string[]>([]);
   const [checkedGames, setCheckedGames] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [removalGames, setRemovalGames] = useState<BGGGame[]>([]);
+  const [removalLoading, setRemovalLoading] = useState(false);
+  const [removingGameId, setRemovingGameId] = useState<string | null>(null);
   const { userId, isBggUser } = useUser();
 
   useEffect(() => {
@@ -74,6 +82,49 @@ export default function AddGame() {
     const owned = await getOwnedGamesInGamesTable(userId);
     if (owned) setGamesListForUser(owned);
   }, [userId]);
+
+  const loadRemovalGames = useCallback(async () => {
+    if (!userId) return;
+    setRemovalLoading(true);
+    const [ownedIds, games] = await Promise.all([
+      getOwnedGamesInGamesTable(userId),
+      getGamesList(),
+    ]);
+    if (!ownedIds || !games) {
+      setAlertInfo({ message: "Could not load your games. Please try again.", severity: "error" });
+      setRemovalGames([]);
+    } else {
+      setGamesListForUser(ownedIds);
+      const names = new Map<string, string>(
+        games.map((game: { gameid: number | string; name: string }) => [
+          String(game.gameid),
+          game.name,
+        ])
+      );
+      setRemovalGames(
+        Array.from(new Set<string>(ownedIds)).map((id) => ({
+          gameid: id,
+          name: names.get(id) || `Game ${id}`,
+        }))
+      );
+    }
+    setRemovalLoading(false);
+  }, [userId]);
+
+  const handleRemoveGame = async (game: BGGGame) => {
+    if (!userId || removingGameId) return;
+    setRemovingGameId(game.gameid);
+    setAlertInfo({ message: "", severity: "" });
+    const result = await removeGameFromDb(game.gameid, userId);
+    if (result.success) {
+      setRemovalGames((games) => games.filter((item) => item.gameid !== game.gameid));
+      setGamesListForUser((ids) => ids.filter((id) => id !== game.gameid));
+      setAlertInfo({ message: `Removed your copy of ${game.name}.`, severity: "success" });
+    } else {
+      setAlertInfo({ message: `Could not remove ${game.name}. Please try again.`, severity: "error" });
+    }
+    setRemovingGameId(null);
+  };
 
   const handleNonBGGSubmit = useCallback(async () => {
     const gameId = extractGameId(gameURL);
@@ -219,13 +270,19 @@ export default function AddGame() {
           >
             <Tabs
               value={tabValue}
-              onChange={(_, v) => setTabValue(v)}
-              variant="fullWidth"
+              onChange={(_, v) => {
+                setTabValue(v);
+                setAlertInfo({ message: "", severity: "" });
+                if (v === 2) void loadRemovalGames();
+              }}
+              variant="scrollable"
+              scrollButtons="auto"
               indicatorColor="primary"
               textColor="primary"
             >
               <Tab label="Add by BGG URL" />
               <Tab label="Import from BGG" />
+              <Tab label="Remove Games" />
             </Tabs>
 
             <Box
@@ -274,6 +331,43 @@ export default function AddGame() {
                   </Box>
                 )}
 
+                {tabValue === 2 && (
+                  <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                    <Typography variant="body2" color="text.secondary" mb={1}>
+                      Remove games you are no longer bringing. Other people&apos;s copies stay on the list.
+                    </Typography>
+                    <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                      {removalLoading ? (
+                        <CircularProgress size={24} aria-label="Loading your games" />
+                      ) : removalGames.length === 0 ? (
+                        <Typography color="text.secondary">No games to remove.</Typography>
+                      ) : (
+                        removalGames.map((game) => (
+                          <Card
+                            key={game.gameid}
+                            variant="outlined"
+                            sx={{ mb: 1, p: 1, display: "flex", alignItems: "center", gap: 1 }}
+                          >
+                            <Typography sx={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+                              {game.name}
+                            </Typography>
+                            <Button
+                              type="button"
+                              color="error"
+                              startIcon={<DeleteOutlineIcon />}
+                              disabled={removingGameId !== null}
+                              onClick={() => void handleRemoveGame(game)}
+                              aria-label={`Remove my copy of ${game.name}`}
+                            >
+                              {removingGameId === game.gameid ? "Removing..." : "Remove"}
+                            </Button>
+                          </Card>
+                        ))
+                      )}
+                    </Box>
+                  </Box>
+                )}
+
                 {alertInfo.message && (
                   <CustomAlert
                     severity={alertInfo.severity}
@@ -281,7 +375,7 @@ export default function AddGame() {
                   />
                 )}
 
-                <Box sx={{ mt: "auto !important" }}>
+                {tabValue !== 2 && <Box sx={{ mt: "auto !important" }}>
                   <PrimaryButton
                     type="submit"
                     disabled={
@@ -296,7 +390,7 @@ export default function AddGame() {
                       "Submit"
                     )}
                   </PrimaryButton>
-                </Box>
+                </Box>}
               </Stack>
             </Box>
           </Paper>

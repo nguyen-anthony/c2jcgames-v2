@@ -18,7 +18,7 @@ const BottomNav = () => {
     <Box sx={{ borderTop: "1px solid", borderColor: "divider", width: "100%" }}>
       <BottomNavigation showLabels onChange={handleChange}>
         <BottomNavigationAction label="Games List" icon={<FormatListBulletedIcon />} />
-        <BottomNavigationAction label="Add Game" icon={<AddIcon />} />
+        <BottomNavigationAction label="Manage Games" icon={<AddIcon />} />
       </BottomNavigation>
     </Box>
   );
