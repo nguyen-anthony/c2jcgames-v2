@@ -143,6 +143,25 @@ export async function getInterestedGamesForUser(userId: string | number) {
 
 /* ── BGG Interactions ─────────────────────────────────────────────────── */
 
+export interface BggSearchResult {
+  gameid: string;
+  name: string;
+  year: string | null;
+}
+
+export async function searchBggGames(query: string) {
+  try {
+    const response = await axios.get<{ results: BggSearchResult[]; truncated: boolean }>(
+      "/api/bgg/search",
+      { params: { query }, "axios-retry": { retries: 0 } }
+    );
+    return { success: true as const, ...response.data };
+  } catch (error) {
+    const message = axios.isAxiosError(error) ? error.response?.data?.error : null;
+    return { success: false as const, message: typeof message === "string" ? message : "Unable to search BGG. Please try again." };
+  }
+}
+
 export async function getGameDetailsFromBGG(gameId: string | number) {
   try {
     const response = await axios.get(`/api/bgg/boardgame/${gameId}`);

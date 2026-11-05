@@ -5,6 +5,7 @@ import { Card, CardContent, Box, Checkbox, Typography } from "@mui/material";
 interface BGGGame {
   gameid: string;
   name: string;
+  year?: string | null;
 }
 
 interface BGGGameCardProps {
@@ -42,11 +43,14 @@ function BGGGameCard({
             disabled={alreadyAdded}
             checked={isChecked}
             size="small"
+            onClick={(event) => event.stopPropagation()}
+            onChange={() => handleCardClick(game)}
             inputProps={{ "aria-label": `checkbox for game ${game.name}` }}
           />
-          <Typography variant="body1" noWrap>
-            {game.name}
-          </Typography>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body1">{game.name}{game.year ? ` (${game.year})` : ""}</Typography>
+            {alreadyAdded && <Typography variant="caption" color="text.secondary">Already added by you</Typography>}
+          </Box>
         </Box>
       </CardContent>
     </Card>

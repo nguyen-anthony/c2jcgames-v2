@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Card,
   Button,
+  TextField,
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CustomAlert from "@/components/Common/CustomAlert";
@@ -30,6 +31,8 @@ import {
   getOwnedGamesInGamesTable,
   getGamesList,
   removeGameFromDb,
+  searchBggGames,
+  type BggSearchResult,
 } from "@/services/gameService";
 
 type AlertInfo = {
@@ -52,6 +55,12 @@ export default function AddGame() {
   const [gameCollection, setGameCollection] = useState<BGGGame[]>([]);
   const [gamesListForUser, setGamesListForUser] = useState<string[]>([]);
   const [checkedGames, setCheckedGames] = useState<{ id: string; name: string }[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<BggSearchResult[]>([]);
+  const [searchSelection, setSearchSelection] = useState<{ id: string; name: string }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [searchTruncated, setSearchTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [removalGames, setRemovalGames] = useState<BGGGame[]>([]);
   const [removalLoading, setRemovalLoading] = useState(false);
@@ -169,15 +178,19 @@ export default function AddGame() {
           chunk.map(async (game) => {
             try {
               let inDb = (await getGameDetailsFromDb(game.id)) !== null;
-              if (!inDb) {
-                const bggRes = await getGameDetailsFromBGG(game.id);
-      if (bggRes.success && bggRes.data) {
-        const addRes = await addGameDetailsToDb(bggRes.data);
+                if (!inDb) {
+                  const bggRes = await getGameDetailsFromBGG(game.id);
+                  if (bggRes.success && bggRes.data) {
+                    const addRes = await addGameDetailsToDb(bggRes.data);
                   inDb = addRes.success;
                 } else {
                   failed.push(game);
                   return;
                 }
+              }
+              if (!inDb) {
+                failed.push(game);
+                return;
               }
               if (inDb) {
                 const addRes = await addGameToDb(game.id, userId!);
@@ -195,32 +208,60 @@ export default function AddGame() {
     [userId]
   );
 
-  const handleBGGImportSubmit = useCallback(async () => {
+  const handleSelectedGamesSubmit = useCallback(async (selectedGames: { id: string; name: string }[], source: "search" | "collection") => {
     const CHUNK_SIZE = 5;
     const chunks: { id: string; name: string }[][] = [];
-    for (let i = 0; i < checkedGames.length; i += CHUNK_SIZE) {
-      chunks.push(checkedGames.slice(i, i + CHUNK_SIZE));
+    for (let i = 0; i < selectedGames.length; i += CHUNK_SIZE) {
+      chunks.push(selectedGames.slice(i, i + CHUNK_SIZE));
     }
     const failed = await processGameChunks(chunks);
-    fetchGamesListForUser();
+    await fetchGamesListForUser();
+    const setSelection = source === "search" ? setSearchSelection : setCheckedGames;
     if (failed.length > 0) {
       setAlertInfo({
         message: `Failed to add: ${failed.map((g) => `${g.name} (ID: ${g.id})`).join(", ")}`,
         severity: "error",
       });
-      setCheckedGames(failed);
+      setSelection(failed);
     } else {
       setAlertInfo({ message: "All games processed successfully.", severity: "success" });
-      setCheckedGames([]);
+      setSelection([]);
     }
-  }, [checkedGames, processGameChunks, fetchGamesListForUser]);
+  }, [processGameChunks, fetchGamesListForUser]);
+
+  const handleSearch = async () => {
+    const query = searchQuery.trim();
+    if (!query || searching || loading) return;
+    setSearching(true);
+    setSearched(false);
+    setSearchResults([]);
+    setSearchSelection([]);
+    setSearchTruncated(false);
+    setAlertInfo({ message: "", severity: "" });
+    const result = await searchBggGames(query);
+    if (result.success) {
+      setSearchResults(result.results);
+      setSearchTruncated(result.truncated);
+      setSearched(true);
+    } else {
+      setAlertInfo({ message: result.message, severity: "error" });
+    }
+    setSearching(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userId || loading || searching || tabValue === 3) return;
+    if (tabValue === 2 && searchSelection.length === 0) return;
     setAlertInfo({ message: "Processing request...", severity: "info" });
     setLoading(true);
-    await (tabValue === 0 ? handleNonBGGSubmit() : handleBGGImportSubmit());
-    setLoading(false);
+    try {
+      if (tabValue === 0) await handleNonBGGSubmit();
+      else if (tabValue === 1) await handleSelectedGamesSubmit(checkedGames, "collection");
+      else await handleSelectedGamesSubmit(searchSelection, "search");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCardClick = (game: BGGGame) => {
@@ -273,16 +314,17 @@ export default function AddGame() {
               onChange={(_, v) => {
                 setTabValue(v);
                 setAlertInfo({ message: "", severity: "" });
-                if (v === 2) void loadRemovalGames();
+                if (v === 3) void loadRemovalGames();
               }}
               variant="scrollable"
               scrollButtons="auto"
               indicatorColor="primary"
               textColor="primary"
             >
-              <Tab label="Add by BGG URL" />
-              <Tab label="Import from BGG" />
-              <Tab label="Remove Games" />
+              <Tab label="Add by BGG URL" disabled={loading || searching} />
+              <Tab label="Import from BGG" disabled={loading || searching} />
+              <Tab label="Search BGG" disabled={loading || searching} />
+              <Tab label="Remove Games" disabled={loading || searching} />
             </Tabs>
 
             <Box
@@ -332,6 +374,57 @@ export default function AddGame() {
                 )}
 
                 {tabValue === 2 && (
+                  <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 1 }}>
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <TextField
+                        label="Search board games"
+                        size="small"
+                        fullWidth
+                        value={searchQuery}
+                        disabled={searching || loading}
+                        slotProps={{ htmlInput: { maxLength: 200 } }}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void handleSearch();
+                          }
+                        }}
+                      />
+                      <Button type="button" variant="outlined" onClick={() => void handleSearch()} disabled={!searchQuery.trim() || searching || loading}>
+                        {searching ? "Searching..." : "Search"}
+                      </Button>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Select base games to add ({searchSelection.length} selected).
+                      {searchTruncated && " Showing the first 100 matches; refine your search for more."}
+                    </Typography>
+                    <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                      {searching ? (
+                        <CircularProgress size={24} aria-label="Searching BGG" />
+                      ) : searched && searchResults.length === 0 ? (
+                        <Typography color="text.secondary">No games found. Try another search.</Typography>
+                      ) : (
+                        searchResults.map((game) => (
+                          <BGGGameCard
+                            key={game.gameid}
+                            game={game}
+                            gamesListForUser={gamesListForUser}
+                            checkedGames={searchSelection}
+                            handleCardClick={(selected) => {
+                              if (loading) return;
+                              setSearchSelection((previous) => previous.some((item) => item.id === selected.gameid)
+                                ? previous.filter((item) => item.id !== selected.gameid)
+                                : [...previous, { id: selected.gameid, name: selected.name }]);
+                            }}
+                          />
+                        ))
+                      )}
+                    </Box>
+                  </Box>
+                )}
+
+                {tabValue === 3 && (
                   <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
                     <Typography variant="body2" color="text.secondary" mb={1}>
                       Remove games you are no longer bringing. Other people&apos;s copies stay on the list.
@@ -375,19 +468,20 @@ export default function AddGame() {
                   />
                 )}
 
-                {tabValue !== 2 && <Box sx={{ mt: "auto !important" }}>
+                {tabValue !== 3 && <Box sx={{ mt: "auto !important" }}>
                   <PrimaryButton
                     type="submit"
                     disabled={
-                      loading ||
+                      !userId || loading || searching ||
                       (tabValue === 1 && bggImportDisabled) ||
-                      (tabValue === 1 && checkedGames.length === 0)
+                      (tabValue === 1 && checkedGames.length === 0) ||
+                      (tabValue === 2 && searchSelection.length === 0)
                     }
                   >
                     {loading ? (
                       <CircularProgress size={20} color="inherit" />
                     ) : (
-                      "Submit"
+                      tabValue === 2 ? "Add selected games" : "Submit"
                     )}
                   </PrimaryButton>
                 </Box>}
